@@ -1,0 +1,7 @@
+{
+  "buildCommand": "npm install",
+  "outputDirectory": "",
+  "routes": [
+    { "src": "/.*", "dest": "/index.js" }
+  ]
+}
