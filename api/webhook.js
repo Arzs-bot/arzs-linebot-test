@@ -16,33 +16,40 @@ async function replyMessage(replyToken, message) {
   });
 
   if (!res.ok) {
-    console.error("❌ LINE reply failed:", await res.text());
+    const errorText = await res.text();
+    console.error("❌ LINE 回覆失敗：", errorText);
   }
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    res.status(405).send("Method Not Allowed");
-    return;
+    return res.status(405).send("Method Not Allowed");
   }
 
   try {
     const events = req.body.events;
     if (!events || events.length === 0) {
-      res.status(200).send("No event");
-      return;
+      console.log("⚠️ 沒有收到任何事件");
+      return res.status(200).send("No event");
     }
 
     const event = events[0];
-    const text = event.message?.text || "（無文字）";
+    const source = event.source?.type || "(無來源)";
     const replyToken = event.replyToken;
+    const messageText = event.message?.text || "(無文字訊息)";
+    const messageType = event.message?.type || "(無類型)";
+    const eventType = event.type;
 
-    console.log("📩 收到訊息：", text);
-    await replyMessage(replyToken, `你說了：「${text}」`);
+    console.log("📝 接收到事件：", { eventType, messageType, source, messageText });
+
+    // 僅處理文字訊息
+    if (eventType === "message" && messageType === "text") {
+      await replyMessage(replyToken, `你剛說了：「${messageText}」`);
+    }
 
     res.status(200).send("OK");
   } catch (err) {
-    console.error("❌ webhook error:", err);
+    console.error("❌ webhook 處理失敗：", err);
     res.status(500).send("Webhook Error");
   }
 }
