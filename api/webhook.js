@@ -7,7 +7,7 @@ async function replyMessage(replyToken, message) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${ACCESS_TOKEN}`
+      Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
     },
     body: JSON.stringify({
       replyToken,
@@ -20,6 +20,7 @@ async function replyMessage(replyToken, message) {
     console.error("❌ LINE 回覆失敗：", errorText);
   }
 }
+
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
