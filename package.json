@@ -6,6 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "micro": "^9.3.4"
     "@line/bot-sdk": "^7.5.0",
     "express": "^4.18.2",
     "node-fetch": "^2.6.11"
