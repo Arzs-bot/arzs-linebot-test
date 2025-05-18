@@ -1,7 +1,5 @@
 export const config = {
-  api: {
-    bodyParser: false, // 告訴 Vercel 不要預設處理 JSON
-  },
+  api: { bodyParser: false }
 };
 
 import { buffer } from 'micro';
@@ -16,19 +14,14 @@ export default async function handler(req, res) {
 
     for (const event of events) {
       console.log("📥 收到事件 type:", event.type);
-
       if (event.type === 'postback') {
-        console.log("✅ 按下按鈕 - postback data:", event.postback.data);
-      }
-
-      if (event.type === 'message' && event.message?.type === 'text') {
-        console.log("💬 收到文字訊息:", event.message.text);
+        console.log("✅ postback data:", event.postback.data);
       }
     }
 
     res.status(200).send('OK');
   } catch (err) {
-    console.error('❌ webhook 解析錯誤:', err);
+    console.error("❌ webhook 錯誤：", err);
     res.status(500).send('Internal Server Error');
   }
 }
