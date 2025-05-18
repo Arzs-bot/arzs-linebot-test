@@ -3,7 +3,7 @@ export const config = {
 };
 
 import { buffer } from 'micro';
-import fetch from 'node-fetch'; // 確保已安裝 node-fetch
+import fetch from 'node-fetch';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
@@ -12,6 +12,9 @@ export default async function handler(req, res) {
     const rawBody = await buffer(req);
     const jsonBody = JSON.parse(rawBody.toString());
     const events = jsonBody.events || [];
+
+    // ✅ 馬上回應 LINE：避免 timeout
+    res.status(200).send('OK');
 
     for (const event of events) {
       console.log("📥 收到事件 type:", event.type);
@@ -22,27 +25,24 @@ export default async function handler(req, res) {
 
         console.log("✅ Postback data:", postbackData);
 
-        // ✅ 傳給 Google Sheets webhook
         const sheetsWebhook = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
 
-        const result = await fetch(sheetsWebhook, {
+        // ✅ 非同步發送，不等待
+        fetch(sheetsWebhook, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...postbackData, userId })
+        }).then(async r => {
+          const result = await r.text();
+          console.log("📤 Sheets webhook 回應：", result);
+        }).catch(err => {
+          console.error("❌ 發送 Sheets webhook 失敗：", err);
         });
-
-        const text = await result.text();
-        console.log("📤 Google Sheets webhook 回應：", text);
-      }
-
-      if (event.type === 'message' && event.message?.type === 'text') {
-        console.log("💬 收到文字訊息:", event.message.text);
       }
     }
 
-    res.status(200).send('OK');
   } catch (err) {
-    console.error("❌ webhook 執行錯誤：", err);
-    res.status(500).send('Internal Server Error');
+    console.error("❌ webhook 錯誤：", err);
+    // 不用再 res.status(500)，因為已經送出 200
   }
 }
