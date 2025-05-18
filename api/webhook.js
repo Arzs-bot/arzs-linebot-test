@@ -1,22 +1,34 @@
+export const config = {
+  api: {
+    bodyParser: false, // 告訴 Vercel 不要預設處理 JSON
+  },
+};
+
+import { buffer } from 'micro';
+
 export default async function handler(req, res) {
-  if (req.method === 'POST') {
-    try {
-      const events = req.body.events || [];
-      if (events.length > 0) {
-        const event = events[0];
-        console.log('👤 userId:', event?.source?.userId);
-        console.log('📩 message:', event?.message?.text);
-      } else {
-        console.log('📭 沒收到 events');
+  if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
+
+  try {
+    const rawBody = await buffer(req);
+    const jsonBody = JSON.parse(rawBody.toString());
+    const events = jsonBody.events || [];
+
+    for (const event of events) {
+      console.log("📥 收到事件 type:", event.type);
+
+      if (event.type === 'postback') {
+        console.log("✅ 按下按鈕 - postback data:", event.postback.data);
       }
 
-      // ✅ 告訴 LINE 一切正常，避免 500 錯誤
-      res.status(200).send('OK');
-    } catch (err) {
-      console.error('❌ Webhook 錯誤：', err);
-      res.status(500).send('Internal Server Error');
+      if (event.type === 'message' && event.message?.type === 'text') {
+        console.log("💬 收到文字訊息:", event.message.text);
+      }
     }
-  } else {
-    res.status(405).send('Method Not Allowed');
+
+    res.status(200).send('OK');
+  } catch (err) {
+    console.error('❌ webhook 解析錯誤:', err);
+    res.status(500).send('Internal Server Error');
   }
 }
