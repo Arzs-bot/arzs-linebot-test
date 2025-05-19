@@ -13,11 +13,12 @@ export default async function handler(req, res) {
     const jsonBody = JSON.parse(rawBody.toString());
     const events = jsonBody.events || [];
 
-    // ✅ 立即回應 LINE 避免 webhook timeout（不能等）
+    // ✅ 優先回應 LINE 避免超時
     res.status(200).send('OK');
 
     for (const event of events) {
       console.log("📥 收到事件 type:", event.type);
+      console.log("👤 來自 userId:", event.source?.userId || '(無 userId)');
 
       if (event.type === 'postback') {
         const postbackData = JSON.parse(event.postback.data || '{}');
@@ -25,10 +26,9 @@ export default async function handler(req, res) {
 
         console.log("✅ Postback data:", postbackData);
 
-        // ✅ 你填入的 Google Apps Script webhook
         const sheetsWebhook = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
 
-        // ✅ 非同步發送，不等待結果
+        // ✅ 非同步發送，不等待完成
         fetch(sheetsWebhook, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -44,6 +44,6 @@ export default async function handler(req, res) {
 
   } catch (err) {
     console.error("❌ webhook 錯誤：", err);
-    // 已回應 200，不需再次回傳錯誤
+    // 不回傳 500，因為前面已 res.send()
   }
 }
