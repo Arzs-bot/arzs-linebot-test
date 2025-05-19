@@ -18,17 +18,41 @@ export default async function handler(req, res) {
 
     for (const event of events) {
       console.log("📥 收到事件 type:", event.type);
-      console.log("👤 來自 userId:", event.source?.userId || '(無 userId)');
+      const userId = event.source?.userId || '(無 userId)';
+      console.log("👤 來自 userId:", userId);
 
+      // ✅ 查詢 LINE 使用者名稱
+      try {
+        const profileRes = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
+          headers: {
+            Authorization: `Bearer ${process.env.LINE_CHANNEL_ACCESS_TOKEN}`
+          }
+        });
+
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          console.log(`👤 使用者名稱：${profile.displayName}`);
+        } else {
+          console.log('⚠️ 無法取得使用者名稱');
+        }
+      } catch (err) {
+        console.error('❌ 查詢 LINE 使用者名稱失敗:', err);
+      }
+
+      // 顯示 message 內容
+      if (event.type === 'message') {
+        const msgType = event.message?.type || '(未知類型)';
+        const msgText = event.message?.text || '(無文字內容)';
+        console.log(`💬 收到訊息（${msgType}）from ${userId}: ${msgText}`);
+      }
+
+      // Postback 處理
       if (event.type === 'postback') {
         const postbackData = JSON.parse(event.postback.data || '{}');
-        const userId = event.source?.userId || '';
-
         console.log("✅ Postback data:", postbackData);
 
         const sheetsWebhook = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
 
-        // ✅ 非同步發送，不等待完成
         fetch(sheetsWebhook, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
