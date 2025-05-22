@@ -30,19 +30,23 @@ export default async function handler(req, res) {
       }
 
       if (event.type === 'postback') {
-        const postbackData = JSON.parse(event.postback.data);
-        const sheetsWebhook = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
+        const postbackData = JSON.parse(event.postback.data); // e.g. { checkStage: "1", orderNo: "250610-123" }
 
-        fetch(sheetsWebhook, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...postbackData, userId })
-        }).then(async r => {
-          const result = await r.text();
-          console.log("📤 Sheets webhook 回應：", result);
-        }).catch(err => {
-          console.error("❌ 發送 Sheets webhook 失敗：", err);
-        });
+        const payload = {
+          orderNo: postbackData.orderNo,
+          checkStage: postbackData.checkStage,
+          user: displayName || "未知使用者",
+          timestamp: new Date().toISOString()
+        };
+
+        const sheetsWebhook = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
+        const result = await postToSheetsWithRetry(payload, sheetsWebhook, 3);
+
+        if (result.success) {
+          console.log("📤 Sheets webhook 寫入成功：", result.response);
+        } else {
+          console.error("❌ Sheets webhook 寫入失敗：", result.error);
+        }
       }
     }
 
@@ -69,5 +73,26 @@ async function getUserDisplayName(userId) {
   } catch (err) {
     console.error("❌ getUserDisplayName 錯誤：", err);
     return null;
+  }
+}
+
+async function postToSheetsWithRetry(payload, url, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const text = await res.text();
+      if (!res.ok) throw new Error(`HTTP ${res.status} - ${text}`);
+      return { success: true, response: text };
+    } catch (err) {
+      console.warn(`⚠️ Retry ${attempt} 失敗:`, err.message);
+      if (attempt === maxRetries) {
+        return { success: false, error: err.message };
+      }
+      await new Promise(r => setTimeout(r, 300 * attempt));
+    }
   }
 }
