@@ -92,24 +92,36 @@ export default async function handler(req, res) {
   }
 }
 
-async function getUserDisplayName(userId) {
-  try {
-    const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
-      headers: { 'Authorization': `Bearer ${LINE_TOKEN}` }
-    });
+async function getUserDisplayName(userId, maxRetries = 3) {
+  const url = `https://api.line.me/v2/bot/profile/${userId}`;
 
-    if (!res.ok) {
-      console.warn("⚠️ 無法取得使用者名稱，Status:", res.status);
-      return null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000); // 3 秒 timeout
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${LINE_TOKEN}` },
+        signal: controller.signal
+      });
+
+      clearTimeout(timeout);
+
+      if (!res.ok) throw new Error(`LINE API 回應失敗：${res.status}`);
+      const json = await res.json();
+      return json.displayName;
+
+    } catch (err) {
+      console.warn(`⚠️ getUserDisplayName 第 ${attempt} 次失敗:`, err.message);
+      if (attempt === maxRetries) {
+        console.error("❌ getUserDisplayName 錯誤：", err);
+        return null;
+      }
+      await new Promise(res => setTimeout(res, 500 * attempt)); // 逐次等待更久
     }
-
-    const json = await res.json();
-    return json.displayName;
-  } catch (err) {
-    console.error("❌ getUserDisplayName 錯誤：", err);
-    return null;
   }
 }
+
 
 async function postToSheetsWithRetry(payload, url, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
