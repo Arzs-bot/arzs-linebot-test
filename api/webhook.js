@@ -114,6 +114,7 @@ async function getUserDisplayName(userId) {
 async function postToSheetsWithRetry(payload, url, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      await new Promise(r => setTimeout(r, 250 * attempt)); // ← 加延遲
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,10 +128,10 @@ async function postToSheetsWithRetry(payload, url, maxRetries = 3) {
       if (attempt === maxRetries) {
         return { success: false, error: err.message };
       }
-      await new Promise(r => setTimeout(r, 300 * attempt));
     }
   }
 }
+
 
 async function sendLineMessage(to, text) {
   if (!to || !text || text.trim() === '') return;
