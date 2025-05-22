@@ -8,7 +8,6 @@ import fetch from 'node-fetch';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const SHEETS_WEBHOOK = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
 
-// 延遲處理的暫存表（純記憶體）
 const delayContext = new Map();
 
 export default async function handler(req, res) {
@@ -19,14 +18,20 @@ export default async function handler(req, res) {
     const jsonBody = JSON.parse(rawBody.toString());
     const events = jsonBody.events || [];
 
-    res.status(200).send('OK'); // 避免 LINE 超時
+    res.status(200).send('OK');
 
     for (const event of events) {
       const userId = event.source?.userId || '';
-      const displayName = await getUserDisplayName(userId);
+      console.log("📥 收到事件 type:", event.type);
+      console.log("👤 來自 userId:", userId);
 
-      // 🔹 處理訊息事件：接收延遲說明文字
+      const displayName = await getUserDisplayName(userId);
+      console.log("📛 使用者名稱：", displayName || "❓ 無法取得");
+
+      // 🔹 延遲原因輸入處理
       if (event.type === 'message' && event.message?.type === 'text') {
+        console.log("📩 對話內容：", event.message.text);
+
         const pending = delayContext.get(userId);
         if (pending?.orderNo && pending?.stageIndex) {
           const payload = {
@@ -41,7 +46,7 @@ export default async function handler(req, res) {
 
           const result = await postToSheetsWithRetry(payload, SHEETS_WEBHOOK, 3);
           if (result.success) {
-            console.log("✅ 延遲原因已傳送到 Sheets");
+            console.log("✅ 延遲原因已寫入 Sheets：", event.message.text);
             delayContext.delete(userId);
           } else {
             console.error("❌ 延遲原因寫入失敗：", result.error);
@@ -52,9 +57,10 @@ export default async function handler(req, res) {
       // 🔸 處理 FLEX postback 按鈕
       if (event.type === 'postback') {
         const data = JSON.parse(event.postback.data || '{}');
+        console.log("📦 postback 資料：", data);
+
         const now = new Date().toISOString();
 
-        // 延遲按鈕（暫存 context）
         if (data.action === "delay") {
           delayContext.set(userId, {
             orderNo: data.orderNo,
@@ -62,9 +68,9 @@ export default async function handler(req, res) {
           });
 
           await sendLineMessage(userId, "⚠️ 請說明延遲原因（請用文字訊息回覆）");
+          console.log("🕒 等待使用者回傳延遲原因");
         }
 
-        // 完成按鈕、或其他按鈕（傳到 GAS webhook）
         const payload = {
           ...data,
           user: displayName || "未知使用者",
@@ -89,15 +95,18 @@ export default async function handler(req, res) {
 async function getUserDisplayName(userId) {
   try {
     const res = await fetch(`https://api.line.me/v2/bot/profile/${userId}`, {
-      headers: {
-        'Authorization': `Bearer ${LINE_TOKEN}`
-      }
+      headers: { 'Authorization': `Bearer ${LINE_TOKEN}` }
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn("⚠️ 無法取得使用者名稱，Status:", res.status);
+      return null;
+    }
+
     const json = await res.json();
     return json.displayName;
   } catch (err) {
+    console.error("❌ getUserDisplayName 錯誤：", err);
     return null;
   }
 }
