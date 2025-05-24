@@ -1,4 +1,6 @@
 // /api/webhook.js
+console.log("🌱 PROJECT_ID:", process.env.FIREBASE_PROJECT_ID);
+
 import { buffer } from 'micro';
 import fetch from 'node-fetch';
 import * as admin from 'firebase-admin';
