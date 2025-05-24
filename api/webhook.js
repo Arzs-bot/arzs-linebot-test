@@ -1,12 +1,4 @@
 // /api/webhook.js
-
-await db.collection("test-debug").add({
-  message: "這是測試寫入",
-  timestamp: admin.firestore.Timestamp.now(),
-});
-
-console.log("🌱 PROJECT_ID:", process.env.FIREBASE_PROJECT_ID);
-
 import { buffer } from 'micro';
 import fetch from 'node-fetch';
 import * as admin from 'firebase-admin';
@@ -14,6 +6,7 @@ import * as admin from 'firebase-admin';
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 
 if (!admin.apps.length) {
+  console.log("🌱 初始化 Firebase Admin...");
   admin.initializeApp({
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
@@ -21,6 +14,8 @@ if (!admin.apps.length) {
       privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
     }),
   });
+} else {
+  console.log("🌱 Firebase Admin 已初始化");
 }
 
 const db = admin.firestore();
@@ -39,6 +34,18 @@ export default async function handler(req, res) {
 
     res.status(200).send('OK');
 
+    // ✅ 測試專用：強制寫一筆資料到 Firestore（無條件）
+    try {
+      console.log("🚀 測試寫入 test-debug 集合...");
+      await db.collection("test-debug").add({
+        message: "這是測試寫入",
+        timestamp: admin.firestore.Timestamp.now(),
+      });
+      console.log("✅ 成功寫入 test-debug");
+    } catch (error) {
+      console.error("❌ 寫入 test-debug 失敗:", error);
+    }
+
     for (const event of events) {
       const userId = event.source?.userId || '';
       console.log("📥 收到事件 type:", event.type);
@@ -47,8 +54,8 @@ export default async function handler(req, res) {
       const displayName = await getUserDisplayName(userId);
       console.log("📛 使用者名稱：", displayName || "❓ 無法取得");
 
-      // ✅ 強制寫入 Firestore，不依賴條件
-      console.log("🟡 即將寫入 Firestore");
+      // ✅ 寫入 line-events 集合
+      console.log("🟡 即將寫入 Firestore line-events...");
       try {
         await db.collection('line-events').add({
           receivedAt: admin.firestore.Timestamp.now(),
