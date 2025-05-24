@@ -11,11 +11,9 @@ if (!admin.apps.length) {
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\n/g, '\n'),
     }),
   });
-} else {
-  console.log("🌱 Firebase Admin 已初始化");
 }
 
 const db = admin.firestore();
@@ -34,14 +32,15 @@ export default async function handler(req, res) {
 
     res.status(200).send('OK');
 
-    // ✅ 測試專用：強制寫一筆資料到 Firestore（無條件）
+    // ✅ 測試強制寫入
     try {
       console.log("🚀 測試寫入 test-debug 集合...");
       await db.collection("test-debug").add({
-        message: "這是測試寫入",
+        message: "🔥 測試資料寫入成功",
         timestamp: admin.firestore.Timestamp.now(),
+        from: "LINE Webhook 測試"
       });
-      console.log("✅ 成功寫入 test-debug");
+      console.log("✅ Firestore 測試寫入完成");
     } catch (error) {
       console.error("❌ 寫入 test-debug 失敗:", error);
     }
@@ -54,7 +53,7 @@ export default async function handler(req, res) {
       const displayName = await getUserDisplayName(userId);
       console.log("📛 使用者名稱：", displayName || "❓ 無法取得");
 
-      // ✅ 寫入 line-events 集合
+      // 寫入 line-events
       console.log("🟡 即將寫入 Firestore line-events...");
       try {
         await db.collection('line-events').add({
