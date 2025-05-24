@@ -1,4 +1,10 @@
 // /api/webhook.js
+
+await db.collection("test-debug").add({
+  message: "這是測試寫入",
+  timestamp: admin.firestore.Timestamp.now(),
+});
+
 console.log("🌱 PROJECT_ID:", process.env.FIREBASE_PROJECT_ID);
 
 import { buffer } from 'micro';
