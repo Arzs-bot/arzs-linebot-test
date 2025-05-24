@@ -5,10 +5,8 @@ import * as admin from 'firebase-admin';
 
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const SHEETS_WEBHOOK = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
-
 const delayContext = new Map();
 
-// 🔐 初始化 Firebase Admin
 if (!admin.apps.length) {
   admin.initializeApp({
     credential: admin.credential.cert({
@@ -33,7 +31,7 @@ export default async function handler(req, res) {
     const jsonBody = JSON.parse(rawBody.toString());
     const events = jsonBody.events || [];
 
-    res.status(200).send('OK'); // 🔁 先回應 LINE 防止 timeout
+    res.status(200).send('OK');
 
     for (const event of events) {
       const userId = event.source?.userId || '';
@@ -43,27 +41,24 @@ export default async function handler(req, res) {
       const displayName = await getUserDisplayName(userId);
       console.log("📛 使用者名稱：", displayName || "❓ 無法取得");
 
+      // ✅ Firestore 寫入
       try {
-  await db.collection('line-events').add({
-    receivedAt: admin.firestore.Timestamp.now(),
-    source: event.source || {},
-    type: event.type,
-    message: event.message || null,
-    postback: event.postback || null,
-    userId,
-    displayName: displayName || "未知使用者",
-    raw: event
-  });
-  console.log("✅ Firestore 寫入成功");
-} catch (error) {
-  console.error("❌ Firestore 寫入錯誤:", error);
-}
+        await db.collection('line-events').add({
+          receivedAt: admin.firestore.Timestamp.now(),
+          source: event.source || {},
+          type: event.type,
+          message: event.message || null,
+          postback: event.postback || null,
+          userId,
+          displayName: displayName || "未知使用者",
+          raw: event
+        });
+        console.log("✅ Firestore 寫入成功");
+      } catch (error) {
+        console.error("❌ Firestore 寫入錯誤:", error);
+      }
 
-
-      // 🔹 延遲原因輸入處理
       if (event.type === 'message' && event.message?.type === 'text') {
-        console.log("📩 對話內容：", event.message.text);
-
         const pending = delayContext.get(userId);
         if (pending?.orderNo && pending?.stageIndex) {
           const payload = {
@@ -86,7 +81,6 @@ export default async function handler(req, res) {
         }
       }
 
-      // 🔸 處理 FLEX postback 按鈕
       if (event.type === 'postback') {
         const data = JSON.parse(event.postback.data || '{}');
         console.log("📦 postback 資料：", data);
@@ -130,7 +124,7 @@ async function getUserDisplayName(userId, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      const timeout = setTimeout(() => controller.abort(), 5000); // ⏱️ 延長 timeout
 
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${LINE_TOKEN}` },
@@ -146,7 +140,7 @@ async function getUserDisplayName(userId, maxRetries = 3) {
     } catch (err) {
       console.warn(`⚠️ getUserDisplayName 第 ${attempt} 次失敗:`, err.message);
       if (attempt === maxRetries) {
-        console.error("❌ getUserDisplayName 錯誤：", err);
+        console.error("❌ getUserDisplayName 最終失敗：", err);
         return null;
       }
       await new Promise(res => setTimeout(res, 500 * attempt));
