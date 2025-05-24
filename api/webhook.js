@@ -43,17 +43,22 @@ export default async function handler(req, res) {
       const displayName = await getUserDisplayName(userId);
       console.log("📛 使用者名稱：", displayName || "❓ 無法取得");
 
-      // ✅ 同步寫入 Firestore（完整 event 儲存）
-      await db.collection('line-events').add({
-        receivedAt: admin.firestore.Timestamp.now(),
-        source: event.source || {},
-        type: event.type,
-        message: event.message || null,
-        postback: event.postback || null,
-        userId,
-        displayName,
-        raw: event
-      });
+      try {
+  await db.collection('line-events').add({
+    receivedAt: admin.firestore.Timestamp.now(),
+    source: event.source || {},
+    type: event.type,
+    message: event.message || null,
+    postback: event.postback || null,
+    userId,
+    displayName: displayName || "未知使用者",
+    raw: event
+  });
+  console.log("✅ Firestore 寫入成功");
+} catch (error) {
+  console.error("❌ Firestore 寫入錯誤:", error);
+}
+
 
       // 🔹 延遲原因輸入處理
       if (event.type === 'message' && event.message?.type === 'text') {
@@ -125,7 +130,7 @@ async function getUserDisplayName(userId, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
+      const timeout = setTimeout(() => controller.abort(), 5000);
 
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${LINE_TOKEN}` },
