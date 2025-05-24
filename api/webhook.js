@@ -1,14 +1,29 @@
-export const config = {
-  api: { bodyParser: false }
-};
-
+// /api/webhook.js
 import { buffer } from 'micro';
 import fetch from 'node-fetch';
+import * as admin from 'firebase-admin';
 
 const LINE_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
 const SHEETS_WEBHOOK = 'https://script.google.com/macros/s/AKfycbyhjG2yeGuJoSU3vGOaYRAHI4O4qgTH-5v-bph-hHTi-dKpb7WS2vVcKOF5e8hjz9Mh/exec';
 
 const delayContext = new Map();
+
+// 🔐 初始化 Firebase Admin
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    }),
+  });
+}
+
+const db = admin.firestore();
+
+export const config = {
+  api: { bodyParser: false }
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
@@ -18,7 +33,7 @@ export default async function handler(req, res) {
     const jsonBody = JSON.parse(rawBody.toString());
     const events = jsonBody.events || [];
 
-    res.status(200).send('OK');
+    res.status(200).send('OK'); // 🔁 先回應 LINE 防止 timeout
 
     for (const event of events) {
       const userId = event.source?.userId || '';
@@ -27,6 +42,18 @@ export default async function handler(req, res) {
 
       const displayName = await getUserDisplayName(userId);
       console.log("📛 使用者名稱：", displayName || "❓ 無法取得");
+
+      // ✅ 同步寫入 Firestore（完整 event 儲存）
+      await db.collection('line-events').add({
+        receivedAt: admin.firestore.Timestamp.now(),
+        source: event.source || {},
+        type: event.type,
+        message: event.message || null,
+        postback: event.postback || null,
+        userId,
+        displayName,
+        raw: event
+      });
 
       // 🔹 延遲原因輸入處理
       if (event.type === 'message' && event.message?.type === 'text') {
@@ -98,7 +125,7 @@ async function getUserDisplayName(userId, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000); // 3 秒 timeout
+      const timeout = setTimeout(() => controller.abort(), 3000);
 
       const res = await fetch(url, {
         headers: { 'Authorization': `Bearer ${LINE_TOKEN}` },
@@ -117,16 +144,15 @@ async function getUserDisplayName(userId, maxRetries = 3) {
         console.error("❌ getUserDisplayName 錯誤：", err);
         return null;
       }
-      await new Promise(res => setTimeout(res, 500 * attempt)); // 逐次等待更久
+      await new Promise(res => setTimeout(res, 500 * attempt));
     }
   }
 }
 
-
 async function postToSheetsWithRetry(payload, url, maxRetries = 3) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      await new Promise(r => setTimeout(r, 250 * attempt)); // ← 加延遲
+      await new Promise(r => setTimeout(r, 250 * attempt));
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,7 +169,6 @@ async function postToSheetsWithRetry(payload, url, maxRetries = 3) {
     }
   }
 }
-
 
 async function sendLineMessage(to, text) {
   if (!to || !text || text.trim() === '') return;
